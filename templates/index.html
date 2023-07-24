@@ -1,0 +1,261 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+        <title>scan-cart</title>
+        <link
+            rel="preload"
+            as="style"
+            onload="this.rel='stylesheet';this.onload=null"
+            href="https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic"
+        />
+        <link
+            rel="preload"
+            as="style"
+            onload="this.rel='stylesheet';this.onload=null"
+            href="https://unpkg.com/normalize.css@8.0.0/normalize.css"
+        />
+        <link
+            rel="preload"
+            as="style"
+            onload="this.rel='stylesheet';this.onload=null"
+            href="https://unpkg.com/milligram@1.3.0/dist/milligram.min.css"
+        />
+        <style>
+            #scanedList > li {
+                list-style: none;
+            }
+            #resultView {
+                margin: 0;
+                padding: 20px;
+                position: absolute;
+                z-index: -1;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="resultView"></div>
+        <main class="wrapper" style="padding-top:2em">
+            <section class="container" id="demo-content">
+                <h1>scan-cart</h1>
+                <div>
+                    <a class="button" id="startButton">Start</a>
+                    <a class="button" id="resetButton">Reset</a>
+                </div>
+
+                <div>
+                    <video id="video" width="400" height="300" style="border: 1px solid gray"></video>
+                </div>
+                
+                <div id="sourceSelectPanel" style="display:none">
+                    <label for="sourceSelect">Toggle Camera:</label>
+                    <select id="sourceSelect" style="max-width:400px"> </select>
+                </div>
+
+                <button type="button" id="createBtn">Generate QR code</button>
+
+                <div>
+                    <ul id="scanedList"></ul>
+                </div>
+            </section>
+        </main>
+    </body> 
+    <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest"></script>
+    <!-- <script type="text/javascript" src="./jquery.min.js"></script> -->
+    <!-- <script type="text/javascript"  src="./qrcode.js"></script> -->
+    <!-- <script src="./tell.js" type="module"></script>
+    <script type="module">
+        import { tell } from "./tell.js";
+        tell();
+    </script> -->
+    <script type="text/javascript">
+        var speech = new SpeechSynthesisUtterance();
+        speech.voice = window.speechSynthesis.getVoices()[1];
+        const maxGroupNum = 4;
+        let codeArr = [];
+        let resultArr = [];
+
+        scanCodeSave = result => {
+            const html = `
+                 <li>
+                 <h5>scan value : ${result.text}</h5>
+                 </li>
+             `;
+
+            codeArr.push(result.text);
+            appendHtml(document.getElementById('scanedList'), html);
+        };
+
+        document.getElementById('createBtn').addEventListener('click', () => {
+            const resultView = document.getElementById('resultView');
+
+            if (codeArr.length < 1) {
+                alert('There is no data to generate.');
+                return false;
+            }
+
+            // Sort by group number
+            for (let i = 1; i < maxGroupNum + 1; i++) {
+                let secondArr = [];
+
+                for (let j = 0; j < codeArr.length; j++) {
+                    const code = codeArr[j];
+
+                    if (code.length > 0) {
+                        if (code.indexOf(i) === 0) {
+                            secondArr.push(code);
+                        }
+                    }
+                }
+                resultArr[i - 1] = secondArr;
+            }
+
+            if (resultArr.length < 1) {
+                console.log('Classification by group failed');
+                return false;
+            }
+
+            // Generate Results Page
+            const closeBtn = '<button type="button" id="closeBtn">Close</button>';
+            appendHtml(document.getElementById('resultView'), closeBtn);
+            document.getElementById('closeBtn').onclick = closeResultView;
+
+            for (let i = 0; i < resultArr.length; i++) {
+                if (resultArr[i].length > 0) {
+                    const resultCode = resultArr[i].join(';');
+                    const html = `
+                     <div>
+                         <span>${i + 1}number one group=> </span>
+                         <span>QR code value : ${resultCode}</span>
+                         <div id="qrcode${i + 1}" style="width:100px; height:100px; margin-top:15px;"></div><br>
+                     </div>
+                 `;
+
+                    appendHtml(document.getElementById('resultView'), html);
+
+                    let qrcodeDomId = 'qrcode' + (i + 1);
+                    let qrcode = new QRCode(document.getElementById(qrcodeDomId), {
+                        width: 100,
+                        height: 100
+                    });
+
+                    qrcode.makeCode(resultCode);
+                }
+            }
+
+            showResultView();
+        });
+
+        // Element dynamic addition
+        appendHtml = (el, str) => {
+            let div = document.createElement('div');
+            div.innerHTML = str;
+            while (div.children.length > 0) {
+                el.appendChild(div.children[0]);
+            }
+        };
+
+        // Show results page
+        showResultView = () => {
+            document.getElementById('resetButton').click();
+
+            const width = document.getElementsByTagName('body')[0].offsetWidth;
+            const height = document.getElementsByTagName('body')[0].offsetHeight;
+
+            resultView.style.width = width + 'px';
+            resultView.style.height = height + 'px';
+            resultView.style.backgroundColor = '#FAFAFA';
+            resultView.style.zIndex = 100;
+            resultView.style.touchAction = 'none';
+        };
+
+        // Call up BAR/QR code scanner
+        window.addEventListener('load', function() {
+            let selectedDeviceId;
+            const codeReader = new ZXing.BrowserMultiFormatReader();
+            codeReader
+                .getVideoInputDevices()
+                .then(videoInputDevices => {
+                    const sourceSelect = document.getElementById('sourceSelect');
+                    selectedDeviceId = videoInputDevices[0].deviceId;
+                    if (videoInputDevices.length >= 1) {
+                        videoInputDevices.forEach(element => {
+                            const sourceOption = document.createElement('option');
+                            sourceOption.text = element.label;
+                            sourceOption.value = element.deviceId;
+                            sourceSelect.appendChild(sourceOption);
+                        });
+                        sourceSelect.onchange = () => {
+                            selectedDeviceId = sourceSelect.value;
+                        };
+                        const sourceSelectPanel = document.getElementById('sourceSelectPanel');
+                        sourceSelectPanel.style.display = 'block';
+                    }
+                    document.getElementById('startButton').addEventListener('click', () => {
+                        codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+                            if (result) {
+                                console.log(result);
+                                if (confirm(result.text + 'Do you want to save?')) {
+                                    let localhost = 'http://127.0.0.1:8000/'
+                                    let barcode = result.text
+                                    let finalurl = localhost.concat(barcode)
+                                    fetch(finalurl, {    
+                                        method: 'GET',    
+                                        withCredentials: true,       
+                                        }
+                                    )
+                                    .then((res) => res.json())    
+                                    .then((data) => {    
+                                        let msg = "The product you scanned is "+ data.product_name+". The price of the product is: "+ data.product_price;
+
+                                        speech.text = msg;
+                                        speech.rate = 0.8;
+                                        speech.pitch = 3.0;
+                                        console.log(speech);
+                                         window.speechSynthesis.speak(speech);    
+                                    })    
+                                    .catch((error) => {    
+                                        console.error(error);    
+                                    });    
+                                    scanCodeSave(result);
+                                }
+                            }
+                            if (err && !(err instanceof ZXing.NotFoundException)) {
+                                console.error(err);
+                                document.getElementById('result').textContent = err;
+                            }
+                        });
+                        console.log(`Started continous decode from camera with id ${selectedDeviceId}`);
+                    });
+                    document.getElementById('resetButton').addEventListener('click', () => {
+                        codeReader.reset();
+                        codeArr = [];
+                        emptyElement(document.getElementById('scanedList'));
+                    });
+                })
+                .catch(err => {
+                    console.error(err);
+                });
+        });
+
+        closeResultView = () => {
+            let resultView = document.getElementById('resultView');
+
+            emptyElement(resultView);
+
+            resultView.style.zIndex = -1;
+            resultView.style.touchAction = 'auto';
+        };
+
+        emptyElement = el => {
+            while (el.firstChild) {
+                el.removeChild(el.firstChild);
+            }
+        };
+    </script>
+
+</html>
